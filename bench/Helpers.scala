@@ -64,8 +64,7 @@ object Helpers {
   def resultSetToCSV(resultSet: ResultSet, outputFile: String): Unit =
     if (resultSet == null) // skipped test
 //      println(s"SKIPPING result set $outputFile")
-      {}
-    else
+      {} else
       val writer = new BufferedWriter(new FileWriter(outputFile))
 
       try {
@@ -92,8 +91,7 @@ object Helpers {
 
   def collectionToCSV[T](data: Seq[T], outputFile: String, headers: Seq[String], toCsvRow: T => Seq[String]): Unit =
     if (data == null) // skipped test
-      {}
-    else
+      {} else
       val file = new BufferedWriter(new FileWriter(outputFile))
 
       try {

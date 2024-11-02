@@ -4,7 +4,6 @@ import scalasql.{Table as ScalaSQLTable, DbApi, query, Expr}
 import scalasql.dialects.PostgresDialect.*
 import scala.annotation.experimental
 
-
 type constant = String | Int | Double
 @experimental
 object FixedPointQuery {
@@ -28,10 +27,7 @@ object FixedPointQuery {
     val basesA = bases.toList.asInstanceOf[List[S]]
     val accA = acc.toList.asInstanceOf[List[S]]
 
-
-    val cmp = nextA.zip(accA).map(
-      (n, a) => n.toSet.subsetOf(a.toSet)
-    ).forall(b => b)
+    val cmp = nextA.zip(accA).map((n, a) => n.toSet.subsetOf(a.toSet)).forall(b => b)
     if (cmp)
       val combo = accA.zip(basesA).map((a: S, b: S) => if (set) then (a ++ b).distinct else a ++ b)
       val res = Tuple.fromArray(combo.toArray).asInstanceOf[T]
@@ -47,7 +43,7 @@ object FixedPointQuery {
     (fns: (ScalaSQLTable[P], ScalaSQLTable[P]) => Unit)
     (cmp: (ScalaSQLTable[P], ScalaSQLTable[P]) => Boolean)
     (copyTo: (next: ScalaSQLTable[P], acc: ScalaSQLTable[P]) => ScalaSQLTable[P])
-  : ScalaSQLTable[P] =
+    : ScalaSQLTable[P] =
     if (Thread.currentThread().isInterrupted) throw new Exception(s"timed out")
 
     fns(bases, next)
@@ -61,12 +57,13 @@ object FixedPointQuery {
       val newBase = next
       scalaSQLFix(newBase, newNext, acc)(fns)(cmp)(copyTo)
 
-  final def scalaSQLSemiNaive[Q, T >: Tuple, P[_[_]]](set: Boolean)
-                                                     (ddb: DuckDBBackend, bases_db: ScalaSQLTable[P], next_db: ScalaSQLTable[P], acc_db: ScalaSQLTable[P])
-                                                     (toTuple: P[Expr] => Tuple)
-                                                     (initBase: () => query.Select[T, Q])
-                                                     (initRecur: ScalaSQLTable[P] => query.Select[T, Q])
-  : Unit = {
+  final def scalaSQLSemiNaive[Q, T >: Tuple, P[_[_]]]
+    (set: Boolean)
+    (ddb: DuckDBBackend, bases_db: ScalaSQLTable[P], next_db: ScalaSQLTable[P], acc_db: ScalaSQLTable[P])
+    (toTuple: P[Expr] => Tuple)
+    (initBase: () => query.Select[T, Q])
+    (initRecur: ScalaSQLTable[P] => query.Select[T, Q])
+    : Unit = {
     val db = ddb.scalaSqlDb.getAutoCommitClientConnection
     ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(bases_db)}")
     ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(next_db)}")
@@ -98,7 +95,9 @@ object FixedPointQuery {
       if (set)
         val tmp = s"${ScalaSQLTable.name(bases)}_tmp"
         ddb.runUpdate(s"CREATE TABLE $tmp AS SELECT * FROM ${ScalaSQLTable.name(bases)} LIMIT 0")
-        ddb.runUpdate(s"INSERT INTO $tmp (SELECT * FROM ${ScalaSQLTable.name(bases)} UNION SELECT * FROM ${ScalaSQLTable.name(acc)})")
+        ddb.runUpdate(
+          s"INSERT INTO $tmp (SELECT * FROM ${ScalaSQLTable.name(bases)} UNION SELECT * FROM ${ScalaSQLTable.name(acc)})"
+        )
         ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(acc)}")
         ddb.runUpdate(s"INSERT INTO ${ScalaSQLTable.name(acc)} (SELECT * FROM $tmp)")
         ddb.runUpdate(s"DROP TABLE $tmp")
@@ -117,7 +116,7 @@ object FixedPointQuery {
     (fns: (T, T) => Unit)
     (cmp: (T, T) => Boolean)
     (copyTo: (T, T) => T)
-  : T = {
+    : T = {
 //    println(s"----- start multifix ------")
 //    println(s"BASE=${ScalaSQLTable.name(bases.asInstanceOf[Tuple2[ScalaSQLTable[?], ScalaSQLTable[?]]]._1)}")
 //    println(s"NEXT=${ScalaSQLTable.name(next.asInstanceOf[Tuple2[ScalaSQLTable[?], ScalaSQLTable[?]]]._1)}")
@@ -143,7 +142,7 @@ object FixedPointQuery {
     (toTuple: (P1[Expr] => Tuple, P2[Expr] => Tuple))
     (initBase: () => (query.Select[T1, Q1], query.Select[T2, Q2]))
     (initRecur: Tables => (query.Select[T1, Q1], query.Select[T2, Q2]))
-  : Unit = {
+    : Unit = {
     val db = ddb.scalaSqlDb.getAutoCommitClientConnection
 
     ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(bases_db._1)}")
@@ -163,9 +162,12 @@ object FixedPointQuery {
     ddb.runUpdate(sqlString2)
 
     def printTable(t: Tables, name: String): Unit =
-      println(s"${name}1(${ScalaSQLTable.name(t._1)})=${db.runRaw[(String)](s"SELECT * FROM ${ScalaSQLTable.name(t._1)}")}")
-      println(s"${name}2(${ScalaSQLTable.name(t._2)})=${db.runRaw[(String, Int)](s"SELECT * FROM ${ScalaSQLTable.name(t._2)}")}")
-
+      println(
+        s"${name}1(${ScalaSQLTable.name(t._1)})=${db.runRaw[(String)](s"SELECT * FROM ${ScalaSQLTable.name(t._1)}")}"
+      )
+      println(
+        s"${name}2(${ScalaSQLTable.name(t._2)})=${db.runRaw[(String, Int)](s"SELECT * FROM ${ScalaSQLTable.name(t._2)}")}"
+      )
 
     val cmp: (Tables, Tables) => Boolean = (next, acc) => {
       val str1 = s"SELECT * FROM ${ScalaSQLTable.name(next._1)} EXCEPT SELECT * FROM ${ScalaSQLTable.name(acc._1)}"
@@ -196,10 +198,14 @@ object FixedPointQuery {
       val tmp = (s"${ScalaSQLTable.name(base._1)}_tmp", s"${ScalaSQLTable.name(base._2)}_tmp")
       if (set)
         ddb.runUpdate(s"CREATE TABLE ${tmp._1} AS SELECT * FROM ${ScalaSQLTable.name(base._1)} LIMIT 0")
-        ddb.runUpdate(s"INSERT INTO ${tmp._1} (SELECT * FROM ${ScalaSQLTable.name(base._1)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._1)})")
+        ddb.runUpdate(
+          s"INSERT INTO ${tmp._1} (SELECT * FROM ${ScalaSQLTable.name(base._1)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._1)})"
+        )
 
         ddb.runUpdate(s"CREATE TABLE ${tmp._2} AS SELECT * FROM ${ScalaSQLTable.name(base._2)} LIMIT 0")
-        ddb.runUpdate(s"INSERT INTO ${tmp._2} (SELECT * FROM ${ScalaSQLTable.name(base._2)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._2)})")
+        ddb.runUpdate(
+          s"INSERT INTO ${tmp._2} (SELECT * FROM ${ScalaSQLTable.name(base._2)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._2)})"
+        )
 
         ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(acc._1)}")
         ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(acc._2)}")
@@ -207,7 +213,6 @@ object FixedPointQuery {
         ddb.runUpdate(s"INSERT INTO ${ScalaSQLTable.name(acc._2)} (SELECT * FROM ${tmp._2})")
         ddb.runUpdate(s"DROP TABLE ${tmp._1}")
         ddb.runUpdate(s"DROP TABLE ${tmp._2}")
-
       else
         ddb.runUpdate(s"INSERT INTO ${ScalaSQLTable.name(acc._1)} (SELECT * FROM ${ScalaSQLTable.name(base._1)})")
         ddb.runUpdate(s"INSERT INTO ${ScalaSQLTable.name(acc._2)} (SELECT * FROM ${ScalaSQLTable.name(base._2)})")
@@ -217,14 +222,25 @@ object FixedPointQuery {
     scalaSQLMultiFix(bases_db, next_db, acc_db)(fixFn)(cmp)(copyInto)
   }
 
-  final def scalaSQLSemiNaiveTHREE[Q1, Q2, Q3, T1 >: Tuple, T2 >: Tuple, T3 >: Tuple, P1[_[_]], P2[_[_]], P3[_[_]], Tables]
+  final def scalaSQLSemiNaiveTHREE[
+      Q1,
+      Q2,
+      Q3,
+      T1 >: Tuple,
+      T2 >: Tuple,
+      T3 >: Tuple,
+      P1[_[_]],
+      P2[_[_]],
+      P3[_[_]],
+      Tables
+  ]
     (using Tables =:= (ScalaSQLTable[P1], ScalaSQLTable[P2], ScalaSQLTable[P3]))
     (set: Boolean)
     (ddb: DuckDBBackend, bases_db: Tables, next_db: Tables, acc_db: Tables)
     (toTuple: (P1[Expr] => Tuple, P2[Expr] => Tuple, P3[Expr] => Tuple))
     (initBase: () => (query.Select[T1, Q1], query.Select[T2, Q2], query.Select[T3, Q3]))
     (initRecur: Tables => (query.Select[T1, Q1], query.Select[T2, Q2], query.Select[T3, Q3]))
-  : Unit = {
+    : Unit = {
     val db = ddb.scalaSqlDb.getAutoCommitClientConnection
 
     ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(bases_db._1)}")
@@ -250,9 +266,15 @@ object FixedPointQuery {
     ddb.runUpdate(sqlString3)
 
     def printTable(t: Tables, name: String): Unit =
-      println(s"${name}1(${ScalaSQLTable.name(t._1)})=${db.runRaw[(String)](s"SELECT * FROM ${ScalaSQLTable.name(t._1)}")}")
-      println(s"${name}2(${ScalaSQLTable.name(t._2)})=${db.runRaw[(String, Int)](s"SELECT * FROM ${ScalaSQLTable.name(t._2)}")}")
-      println(s"${name}3(${ScalaSQLTable.name(t._3)})=${db.runRaw[(String, Int, Double)](s"SELECT * FROM ${ScalaSQLTable.name(t._3)}")}")
+      println(
+        s"${name}1(${ScalaSQLTable.name(t._1)})=${db.runRaw[(String)](s"SELECT * FROM ${ScalaSQLTable.name(t._1)}")}"
+      )
+      println(
+        s"${name}2(${ScalaSQLTable.name(t._2)})=${db.runRaw[(String, Int)](s"SELECT * FROM ${ScalaSQLTable.name(t._2)}")}"
+      )
+      println(
+        s"${name}3(${ScalaSQLTable.name(t._3)})=${db.runRaw[(String, Int, Double)](s"SELECT * FROM ${ScalaSQLTable.name(t._3)}")}"
+      )
 
     val cmp: (Tables, Tables) => Boolean = (next, acc) => {
       val str1 = s"SELECT * FROM ${ScalaSQLTable.name(next._1)} EXCEPT SELECT * FROM ${ScalaSQLTable.name(acc._1)}"
@@ -289,16 +311,26 @@ object FixedPointQuery {
     }
 
     val copyInto: (Tables, Tables) => Tables = (base, acc) => {
-      val tmp = (s"${ScalaSQLTable.name(base._1)}_tmp", s"${ScalaSQLTable.name(base._2)}_tmp", s"${ScalaSQLTable.name(base._3)}_tmp")
+      val tmp = (
+        s"${ScalaSQLTable.name(base._1)}_tmp",
+        s"${ScalaSQLTable.name(base._2)}_tmp",
+        s"${ScalaSQLTable.name(base._3)}_tmp"
+      )
       if (set)
         ddb.runUpdate(s"CREATE TABLE ${tmp._1} AS SELECT * FROM ${ScalaSQLTable.name(base._1)} LIMIT 0")
-        ddb.runUpdate(s"INSERT INTO ${tmp._1} (SELECT * FROM ${ScalaSQLTable.name(base._1)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._1)})")
+        ddb.runUpdate(
+          s"INSERT INTO ${tmp._1} (SELECT * FROM ${ScalaSQLTable.name(base._1)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._1)})"
+        )
 
         ddb.runUpdate(s"CREATE TABLE ${tmp._2} AS SELECT * FROM ${ScalaSQLTable.name(base._2)} LIMIT 0")
-        ddb.runUpdate(s"INSERT INTO ${tmp._2} (SELECT * FROM ${ScalaSQLTable.name(base._2)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._2)})")
+        ddb.runUpdate(
+          s"INSERT INTO ${tmp._2} (SELECT * FROM ${ScalaSQLTable.name(base._2)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._2)})"
+        )
 
         ddb.runUpdate(s"CREATE TABLE ${tmp._3} AS SELECT * FROM ${ScalaSQLTable.name(base._3)} LIMIT 0")
-        ddb.runUpdate(s"INSERT INTO ${tmp._3} (SELECT * FROM ${ScalaSQLTable.name(base._3)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._3)})")
+        ddb.runUpdate(
+          s"INSERT INTO ${tmp._3} (SELECT * FROM ${ScalaSQLTable.name(base._3)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._3)})"
+        )
 
         ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(acc._1)}")
         ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(acc._2)}")
@@ -309,7 +341,6 @@ object FixedPointQuery {
         ddb.runUpdate(s"DROP TABLE ${tmp._1}")
         ddb.runUpdate(s"DROP TABLE ${tmp._2}")
         ddb.runUpdate(s"DROP TABLE ${tmp._3}")
-
       else
         ddb.runUpdate(s"INSERT INTO ${ScalaSQLTable.name(acc._1)} (SELECT * FROM ${ScalaSQLTable.name(base._1)})")
         ddb.runUpdate(s"INSERT INTO ${ScalaSQLTable.name(acc._2)} (SELECT * FROM ${ScalaSQLTable.name(base._2)})")
@@ -320,14 +351,28 @@ object FixedPointQuery {
     scalaSQLMultiFix(bases_db, next_db, acc_db)(fixFn)(cmp)(copyInto)
   }
 
-  final def scalaSQLSemiNaiveFOUR[Q1, Q2, Q3, Q4, T1 >: Tuple, T2 >: Tuple, T3 >: Tuple, T4 >: Tuple, P1[_[_]], P2[_[_]], P3[_[_]], P4[_[_]], Tables]
+  final def scalaSQLSemiNaiveFOUR[
+      Q1,
+      Q2,
+      Q3,
+      Q4,
+      T1 >: Tuple,
+      T2 >: Tuple,
+      T3 >: Tuple,
+      T4 >: Tuple,
+      P1[_[_]],
+      P2[_[_]],
+      P3[_[_]],
+      P4[_[_]],
+      Tables
+  ]
     (using Tables =:= (ScalaSQLTable[P1], ScalaSQLTable[P2], ScalaSQLTable[P3], ScalaSQLTable[P4]))
     (set: Boolean)
     (ddb: DuckDBBackend, bases_db: Tables, next_db: Tables, acc_db: Tables)
     (toTuple: (P1[Expr] => Tuple, P2[Expr] => Tuple, P3[Expr] => Tuple, P4[Expr] => Tuple))
     (initBase: () => (query.Select[T1, Q1], query.Select[T2, Q2], query.Select[T3, Q3], query.Select[T4, Q4]))
     (initRecur: Tables => (query.Select[T1, Q1], query.Select[T2, Q2], query.Select[T3, Q3], query.Select[T4, Q4]))
-  : Unit = {
+    : Unit = {
     val db = ddb.scalaSqlDb.getAutoCommitClientConnection
 
     ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(bases_db._1)}")
@@ -359,10 +404,18 @@ object FixedPointQuery {
     ddb.runUpdate(sqlString4)
 
     def printTable(t: Tables, name: String): Unit =
-      println(s"${name}1(${ScalaSQLTable.name(t._1)})=${db.runRaw[(Int, String, Int)](s"SELECT * FROM ${ScalaSQLTable.name(t._1)}")}")
-      println(s"${name}2(${ScalaSQLTable.name(t._2)})=${db.runRaw[(Int, String)](s"SELECT * FROM ${ScalaSQLTable.name(t._2)}")}")
-      println(s"${name}3(${ScalaSQLTable.name(t._3)})=${db.runRaw[(Int, Int)](s"SELECT * FROM ${ScalaSQLTable.name(t._3)}")}")
-      println(s"${name}4(${ScalaSQLTable.name(t._4)})=${db.runRaw[(Int, Int)](s"SELECT * FROM ${ScalaSQLTable.name(t._4)}")}")
+      println(
+        s"${name}1(${ScalaSQLTable.name(t._1)})=${db.runRaw[(Int, String, Int)](s"SELECT * FROM ${ScalaSQLTable.name(t._1)}")}"
+      )
+      println(
+        s"${name}2(${ScalaSQLTable.name(t._2)})=${db.runRaw[(Int, String)](s"SELECT * FROM ${ScalaSQLTable.name(t._2)}")}"
+      )
+      println(
+        s"${name}3(${ScalaSQLTable.name(t._3)})=${db.runRaw[(Int, Int)](s"SELECT * FROM ${ScalaSQLTable.name(t._3)}")}"
+      )
+      println(
+        s"${name}4(${ScalaSQLTable.name(t._4)})=${db.runRaw[(Int, Int)](s"SELECT * FROM ${ScalaSQLTable.name(t._4)}")}"
+      )
 
     val cmp: (Tables, Tables) => Boolean = (next, acc) => {
       val (newDelta1, newDelta2, newDelta3, newDelta4) = (
@@ -415,19 +468,32 @@ object FixedPointQuery {
     }
 
     val copyInto: (Tables, Tables) => Tables = (base, acc) => {
-      val tmp = (s"${ScalaSQLTable.name(base._1)}_tmp", s"${ScalaSQLTable.name(base._2)}_tmp", s"${ScalaSQLTable.name(base._3)}_tmp", s"${ScalaSQLTable.name(base._4)}_tmp")
+      val tmp = (
+        s"${ScalaSQLTable.name(base._1)}_tmp",
+        s"${ScalaSQLTable.name(base._2)}_tmp",
+        s"${ScalaSQLTable.name(base._3)}_tmp",
+        s"${ScalaSQLTable.name(base._4)}_tmp"
+      )
       if (set)
         ddb.runUpdate(s"CREATE TABLE ${tmp._1} AS SELECT * FROM ${ScalaSQLTable.name(base._1)} LIMIT 0")
-        ddb.runUpdate(s"INSERT INTO ${tmp._1} (SELECT * FROM ${ScalaSQLTable.name(base._1)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._1)})")
+        ddb.runUpdate(
+          s"INSERT INTO ${tmp._1} (SELECT * FROM ${ScalaSQLTable.name(base._1)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._1)})"
+        )
 
         ddb.runUpdate(s"CREATE TABLE ${tmp._2} AS SELECT * FROM ${ScalaSQLTable.name(base._2)} LIMIT 0")
-        ddb.runUpdate(s"INSERT INTO ${tmp._2} (SELECT * FROM ${ScalaSQLTable.name(base._2)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._2)})")
+        ddb.runUpdate(
+          s"INSERT INTO ${tmp._2} (SELECT * FROM ${ScalaSQLTable.name(base._2)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._2)})"
+        )
 
         ddb.runUpdate(s"CREATE TABLE ${tmp._3} AS SELECT * FROM ${ScalaSQLTable.name(base._3)} LIMIT 0")
-        ddb.runUpdate(s"INSERT INTO ${tmp._3} (SELECT * FROM ${ScalaSQLTable.name(base._3)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._3)})")
+        ddb.runUpdate(
+          s"INSERT INTO ${tmp._3} (SELECT * FROM ${ScalaSQLTable.name(base._3)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._3)})"
+        )
 
         ddb.runUpdate(s"CREATE TABLE ${tmp._4} AS SELECT * FROM ${ScalaSQLTable.name(base._4)} LIMIT 0")
-        ddb.runUpdate(s"INSERT INTO ${tmp._4} (SELECT * FROM ${ScalaSQLTable.name(base._4)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._4)})")
+        ddb.runUpdate(
+          s"INSERT INTO ${tmp._4} (SELECT * FROM ${ScalaSQLTable.name(base._4)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._4)})"
+        )
 
         ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(acc._1)}")
         ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(acc._2)}")
@@ -443,7 +509,6 @@ object FixedPointQuery {
         ddb.runUpdate(s"DROP TABLE ${tmp._2}")
         ddb.runUpdate(s"DROP TABLE ${tmp._3}")
         ddb.runUpdate(s"DROP TABLE ${tmp._4}")
-
       else
         ddb.runUpdate(s"INSERT INTO ${ScalaSQLTable.name(acc._1)} (SELECT * FROM ${ScalaSQLTable.name(base._1)})")
         ddb.runUpdate(s"INSERT INTO ${ScalaSQLTable.name(acc._2)} (SELECT * FROM ${ScalaSQLTable.name(base._2)})")
@@ -455,12 +520,13 @@ object FixedPointQuery {
     scalaSQLMultiFix(bases_db, next_db, acc_db)(fixFn)(cmp)(copyInto)
   }
 
-  final def agg_scalaSQLSemiNaive[Q, T >: Tuple, P[_[_]]](set: Boolean)
-                                                     (ddb: DuckDBBackend, bases_db: ScalaSQLTable[P], next_db: ScalaSQLTable[P], acc_db: ScalaSQLTable[P])
-                                                     (toTuple: P[Expr] => Tuple)
-                                                     (initBase: () => String)
-                                                     (initRecur: ScalaSQLTable[P] => String)
-  : Unit = {
+  final def agg_scalaSQLSemiNaive[Q, T >: Tuple, P[_[_]]]
+    (set: Boolean)
+    (ddb: DuckDBBackend, bases_db: ScalaSQLTable[P], next_db: ScalaSQLTable[P], acc_db: ScalaSQLTable[P])
+    (toTuple: P[Expr] => Tuple)
+    (initBase: () => String)
+    (initRecur: ScalaSQLTable[P] => String)
+    : Unit = {
     val db = ddb.scalaSqlDb.getAutoCommitClientConnection
     ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(bases_db)}")
     ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(next_db)}")
@@ -486,7 +552,9 @@ object FixedPointQuery {
       if (set)
         val tmp = s"${ScalaSQLTable.name(bases)}_tmp"
         ddb.runUpdate(s"CREATE TABLE $tmp AS SELECT * FROM ${ScalaSQLTable.name(bases)} LIMIT 0")
-        ddb.runUpdate(s"INSERT INTO $tmp (SELECT * FROM ${ScalaSQLTable.name(bases)} UNION SELECT * FROM ${ScalaSQLTable.name(acc)})")
+        ddb.runUpdate(
+          s"INSERT INTO $tmp (SELECT * FROM ${ScalaSQLTable.name(bases)} UNION SELECT * FROM ${ScalaSQLTable.name(acc)})"
+        )
         ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(acc)}")
         ddb.runUpdate(s"INSERT INTO ${ScalaSQLTable.name(acc)} (SELECT * FROM $tmp)")
         ddb.runUpdate(s"DROP TABLE $tmp")
@@ -504,7 +572,7 @@ object FixedPointQuery {
     (toTuple: (P1[Expr] => Tuple, P2[Expr] => Tuple))
     (initBase: () => (query.Select[T1, Q1], query.Select[T2, Q2]))
     (initRecur: Tables => (String, String))
-  : Unit = {
+    : Unit = {
     val db = ddb.scalaSqlDb.getAutoCommitClientConnection
 
     ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(bases_db._1)}")
@@ -524,9 +592,12 @@ object FixedPointQuery {
     ddb.runUpdate(sqlString2)
 
     def printTable(t: Tables, name: String): Unit =
-      println(s"${name}1(${ScalaSQLTable.name(t._1)})=${db.runRaw[(String)](s"SELECT * FROM ${ScalaSQLTable.name(t._1)}")}")
-      println(s"${name}2(${ScalaSQLTable.name(t._2)})=${db.runRaw[(String, Int)](s"SELECT * FROM ${ScalaSQLTable.name(t._2)}")}")
-
+      println(
+        s"${name}1(${ScalaSQLTable.name(t._1)})=${db.runRaw[(String)](s"SELECT * FROM ${ScalaSQLTable.name(t._1)}")}"
+      )
+      println(
+        s"${name}2(${ScalaSQLTable.name(t._2)})=${db.runRaw[(String, Int)](s"SELECT * FROM ${ScalaSQLTable.name(t._2)}")}"
+      )
 
     val cmp: (Tables, Tables) => Boolean = (next, acc) => {
       val str1 = s"SELECT * FROM ${ScalaSQLTable.name(next._1)} EXCEPT SELECT * FROM ${ScalaSQLTable.name(acc._1)}"
@@ -551,10 +622,14 @@ object FixedPointQuery {
       val tmp = (s"${ScalaSQLTable.name(base._1)}_tmp", s"${ScalaSQLTable.name(base._2)}_tmp")
       if (set)
         ddb.runUpdate(s"CREATE TABLE ${tmp._1} AS SELECT * FROM ${ScalaSQLTable.name(base._1)} LIMIT 0")
-        ddb.runUpdate(s"INSERT INTO ${tmp._1} (SELECT * FROM ${ScalaSQLTable.name(base._1)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._1)})")
+        ddb.runUpdate(
+          s"INSERT INTO ${tmp._1} (SELECT * FROM ${ScalaSQLTable.name(base._1)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._1)})"
+        )
 
         ddb.runUpdate(s"CREATE TABLE ${tmp._2} AS SELECT * FROM ${ScalaSQLTable.name(base._2)} LIMIT 0")
-        ddb.runUpdate(s"INSERT INTO ${tmp._2} (SELECT * FROM ${ScalaSQLTable.name(base._2)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._2)})")
+        ddb.runUpdate(
+          s"INSERT INTO ${tmp._2} (SELECT * FROM ${ScalaSQLTable.name(base._2)} UNION SELECT * FROM ${ScalaSQLTable.name(acc._2)})"
+        )
 
         ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(acc._1)}")
         ddb.runUpdate(s"DELETE FROM ${ScalaSQLTable.name(acc._2)}")
@@ -562,7 +637,6 @@ object FixedPointQuery {
         ddb.runUpdate(s"INSERT INTO ${ScalaSQLTable.name(acc._2)} (SELECT * FROM ${tmp._2})")
         ddb.runUpdate(s"DROP TABLE ${tmp._1}")
         ddb.runUpdate(s"DROP TABLE ${tmp._2}")
-
       else
         ddb.runUpdate(s"INSERT INTO ${ScalaSQLTable.name(acc._1)} (SELECT * FROM ${ScalaSQLTable.name(base._1)})")
         ddb.runUpdate(s"INSERT INTO ${ScalaSQLTable.name(acc._2)} (SELECT * FROM ${ScalaSQLTable.name(base._2)})")

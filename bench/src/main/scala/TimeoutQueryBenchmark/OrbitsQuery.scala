@@ -88,7 +88,6 @@ class TOOrbitsQuery extends QueryBenchmark {
           )
         )
 
-
     val query = orbits match
       case Query.MultiRecursive(_, _, orbitsRef) =>
         orbits.filter(o =>
@@ -96,7 +95,8 @@ class TOOrbitsQuery extends QueryBenchmark {
             .flatMap(o1 =>
               orbitsRef
                 .filter(o2 => o1.y == o2.x)
-                .map(o2 => (x = o1.x, y = o2.y).toRow))
+                .map(o2 => (x = o1.x, y = o2.y).toRow)
+            )
             .filter(io => o.x == io.x && o.y == io.y)
             .nonEmpty
         ).sort(_.x, Ord.ASC).sort(_.y, Ord.ASC)
@@ -107,17 +107,19 @@ class TOOrbitsQuery extends QueryBenchmark {
   def executeCollections(): Unit =
     val base = collectionsDB.base
     val orbits = FixedPointQuery.fix(set)(base, Seq())(orbits =>
-        orbits.flatMap(p =>
-          if Thread.currentThread().isInterrupted then throw new Exception(s"$name timed out")
-          orbits
-           .filter(e =>
-             if Thread.currentThread().isInterrupted then throw new Exception(s"$name timed out")
-             p.y == e.x)
-           .map(e =>
-             if Thread.currentThread().isInterrupted then throw new Exception(s"$name timed out")
-             OrbitsCC(x = p.x, y = e.y))
-        )
+      orbits.flatMap(p =>
+        if Thread.currentThread().isInterrupted then throw new Exception(s"$name timed out")
+        orbits
+          .filter(e =>
+            if Thread.currentThread().isInterrupted then throw new Exception(s"$name timed out")
+            p.y == e.x
+          )
+          .map(e =>
+            if Thread.currentThread().isInterrupted then throw new Exception(s"$name timed out")
+            OrbitsCC(x = p.x, y = e.y)
+          )
       )
+    )
     resultCollections = orbits.filter(o0 =>
       if Thread.currentThread().isInterrupted then throw new Exception(s"$name timed out")
       orbits.exists(o4 =>
@@ -128,7 +130,6 @@ class TOOrbitsQuery extends QueryBenchmark {
         )
       )
     ).sortBy(_.x).sortBy(_.y)
-
 
   def executeScalaSQL(ddb: DuckDBBackend): Unit =
     val db = ddb.scalaSqlDb.getAutoCommitClientConnection
@@ -143,20 +144,25 @@ class TOOrbitsQuery extends QueryBenchmark {
       } yield (p.x, e.y)
 
     FixedPointQuery.scalaSQLSemiNaive(set)(
-      ddb, orbits_delta, orbits_tmp, orbits_derived
-    )(toTuple)(initBase.asInstanceOf[() => query.Select[Any, Any]])(fixFn.asInstanceOf[ScalaSQLTable[OrbitsSS] => query.Select[Any, Any]])
+      ddb,
+      orbits_delta,
+      orbits_tmp,
+      orbits_derived
+    )(toTuple)(initBase.asInstanceOf[() => query.Select[Any, Any]])(
+      fixFn.asInstanceOf[ScalaSQLTable[OrbitsSS] => query.Select[Any, Any]]
+    )
 
     //    orbits_base.select.groupBy(_.dst)(_.dst) groupBy does not work with ScalaSQL + postgres
     backupResultScalaSql = ddb.runQuery(
       "SELECT *" +
-      s"FROM ${ScalaSQLTable.name(orbits_derived)} as recref0" +
-      " WHERE EXISTS" +
-      "     (SELECT * FROM" +
-      "     (SELECT ref4.x as x, ref5.y as y" +
-      s"        FROM ${ScalaSQLTable.name(orbits_derived)} as ref4, ${ScalaSQLTable.name(orbits_derived)} as ref5" +
-      "       WHERE ref4.y = ref5.x) as subquery9" +
-      "     WHERE recref0.x = subquery9.x AND recref0.y = subquery9.y)" +
-      " ORDER BY recref0.y, recref0.x"
+        s"FROM ${ScalaSQLTable.name(orbits_derived)} as recref0" +
+        " WHERE EXISTS" +
+        "     (SELECT * FROM" +
+        "     (SELECT ref4.x as x, ref5.y as y" +
+        s"        FROM ${ScalaSQLTable.name(orbits_derived)} as ref4, ${ScalaSQLTable.name(orbits_derived)} as ref5" +
+        "       WHERE ref4.y = ref5.x) as subquery9" +
+        "     WHERE recref0.x = subquery9.x AND recref0.y = subquery9.y)" +
+        " ORDER BY recref0.y, recref0.x"
     )
 
   // Write results to csv for checking
